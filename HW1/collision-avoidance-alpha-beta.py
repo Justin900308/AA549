@@ -46,6 +46,7 @@ def plotting(X, Y, X_hat, case):
     alpha = para[case][0]
     beta = para[case][1]
     plt.subplot(2, 1, 1)
+    plt.suptitle(rf"($\alpha$ = {alpha}, $\beta$ = {beta})")
     plt.plot(X[:, 0], label='distance')
     plt.plot(Y, label='measurement', ls='None', marker='x', ms=5)
     plt.plot(X_hat[:, 0], label='estimate')
