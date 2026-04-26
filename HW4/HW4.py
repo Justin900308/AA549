@@ -36,7 +36,7 @@ def F_lin(Y, X1, P, R, methods):
 
 def compute_E_and_Cov(X1, phi):
     N = len(X1)
-    Exp_phi = np.sum(phi) / N  ## this is a vector of length 2
+    Exp_phi = np.sum(phi,axis=1) / N  ## this is a vector of length 2
     Exp_X1 = np.sum(X1) / N  ## this is a scalar
     Cov_phi = np.sum((phi - Exp_phi) @ (phi - Exp_phi).T) / N  ## this is N x N matrix
     Cov_X_phi = np.sum((X1 - Exp_X1) @ (phi - Exp_phi).T) / N  ## this is N dim vector
