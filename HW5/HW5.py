@@ -32,7 +32,7 @@ b = np.random.normal(mu, sigma, 1)
 ## check if observable
 Obs_C = np.vstack((C_aug, np.vstack((C_aug @ A_aug, C_aug @ A_aug @ A_aug))))
 rank = np.linalg.matrix_rank(Obs_C)
-print(rf"rank {rank} larger than 3, observable")
+print(rf"rank {rank} larger or equal to 3, observable")
 
 
 def true_dynamics(Xt, ut):
