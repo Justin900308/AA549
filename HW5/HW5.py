@@ -11,9 +11,11 @@ t_list = np.linspace(0, T - 1, T) * dt
 A = np.array([[1, dt],
               [0, 1]])
 B = np.array([dt ** 2 / 2, dt])
+C = np.array([[1, 0]])
 mu, sigma = 0, 1
 Q = np.outer(B, B)
-u = np.sin(t_list * dt)  ## true control
+R = 1
+u = np.sin(t_list)  ## true control
 ## random variables
 X0 = np.random.normal(mu, sigma, n)
 v = np.random.normal(mu, sigma, T - 1)
@@ -32,45 +34,78 @@ def prediction(Xt_t, ut_t, Pt_t):
     return Xtp1_t, Ptp1_t
 
 
+def condition(Xtp1_t, Ytp1, Ptp1_t):
+    ## compute S
+    S = C @ Ptp1_t @ C.T + R
+    ## compute K
+    K = Ptp1_t @ C.T / S
+    ## innovation
+    innov = Ytp1 - C @ Xtp1_t
+
+    ## conditioning
+    Xtp1_tp1 = Xtp1_t + (K * innov).reshape(-1)
+    Ptp1_tp1 = Ptp1_t - Ptp1_t @ C.T @ C @ Ptp1_t / S
+
+    return Xtp1_tp1, Ptp1_tp1
+
+
 def propagation(X0, u, v, W):
     X_list = []
     P_list = []
     X_true = np.zeros((T, n))
     X_pred_only = X_true.copy()
+    X_KF = X_true.copy()
     X_true[0] = X0
     P_pred_only = np.zeros((T, n, n))
-    P_pred_only[0] = np.eye(2) ## initial cov is given by X0
+    P_pred_only[0] = np.eye(2)  ## initial cov is given by X0
+    P_KF = P_pred_only.copy()
 
     for t in range(T - 1):
         ut = u[t]
         ut_t = ut + v[t]
         ## for true dynamics
         X_true[t + 1] = true_dynamics(X_true[t], ut)
-        ## pred only
+        #### pred only
         X_pred_only[t + 1], P_pred_only[t + 1] = prediction(X_pred_only[t], ut_t, P_pred_only[t])
+
+        #### For KF
+        X_pred_KF, P_pred_KF = prediction(X_KF[t], ut_t, P_KF[t])  ## prediction
+        Ytp1 = C @ X_true[t + 1] + W[t+1]
+        X_KF[t + 1], P_KF[t + 1] = condition(X_pred_KF, Ytp1, P_pred_KF)  ## conditioning
 
     X_list.append(X_true)
     X_list.append(X_pred_only)
+    X_list.append(X_KF)
     P_list.append(P_pred_only)
+    P_list.append(P_KF)
     X_error_list = []
     X_error_pred = X_true - X_pred_only
+    X_error_KF = X_true - X_KF
     X_error_list.append(X_error_pred)
+    X_error_list.append(X_error_KF)
     return X_list, X_error_list, P_list
 
 
 X_list, X_error_list, P_list = propagation(X0, u, v, W)
 
 ####### plot
-fig, ax = plt.subplots(figsize=(7, 5))
+fig, ax = plt.subplots(2, 1, figsize=(7, 5))
 #### for the cov
 ## cov bounds (time, P)
-bound_1 = 2 * np.sqrt(P_list[0][:, 0, 0])
-ax.plot(t_list, X_list[1][:, 0] + bound_1, "r-.", label=rf"Cov bounds")
-ax.plot(t_list, X_list[1][:, 0] - bound_1, "r-.")
+bound_pred = 2 * np.sqrt(P_list[0][:, 0, 0])
+ax[0].plot(t_list, X_list[1][:, 0] + bound_pred, "r-.", label=rf"Cov pred bounds")
+ax[0].plot(t_list, X_list[1][:, 0] - bound_pred, "r-.")
+bound_KF = 2 * np.sqrt(P_list[1][:, 0, 0])
+ax[1].plot(t_list, X_list[2][:, 0] + bound_KF, "r-.", label=rf"Cov KF bounds")
+ax[1].plot(t_list, X_list[2][:, 0] - bound_KF, "r-.")
 
 #### for the traj
-ax.plot(t_list, X_list[0][:, 0], "b", label=rf"True traj")
-ax.plot(t_list, X_list[1][:, 0], "r-", label=rf"Pred only traj")
-ax.legend()
+for i in range(2):
+    ax[i].plot(t_list, X_list[0][:, 0], "b", label=rf"True traj")
+    ax[i].plot(t_list, X_list[i + 1][:, 0], "r-", label=rf"Pred only traj")
+    ax[i].legend()
+    ax[i].grid(True)
+    ax[i].set_xlabel(r"$t$")
+    ax[i].set_ylabel(r"$X_1,\; \hat{X}_1$")
 plt.tight_layout()
 plt.show()
