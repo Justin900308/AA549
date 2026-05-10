@@ -41,8 +41,8 @@ CIRCLE_DIAMETER = 10.0             # meters
 RADIUS = CIRCLE_DIAMETER / 2.0
 omega_const = 2.0 * np.pi / T_FINAL
 v_const = RADIUS * omega_const
-Q = np.diag([(np.pi / 180.0) ** 2, 1e-4, 1e-4])
-N = np.eye(2)
+Q = np.diag([(np.pi / 180.0) ** 2, 1e-4, 1e-4]) ## for process noise
+N = np.eye(2) ## for measurement noise
 H0 = np.array([np.pi / 2.0, RADIUS, 0.0])  # starts on a radius-5 circle centered at origin
 
 # The paper's Fig. 1 uses 1 degree and 45 degree initial heading errors.
@@ -50,7 +50,7 @@ INITIAL_HEADING_ERRORS_DEG = [1.0, 45.0]
 
 # Keep actual process and measurement noise off to reproduce the deterministic observer comparison.
 # Q and N are still used as EKF/LIEKF design/tuning matrices, as in the paper.
-ADD_SIMULATION_NOISE = True
+ADD_SIMULATION_NOISE = True ## Turn on or off the process noise
 RNG_SEED = 13
 
 
