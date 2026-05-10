@@ -36,7 +36,7 @@ class ContinuousDiscreteCarEKF:
 
     def update(self, y_gps) -> None:
         y_gps = np.asarray(y_gps, dtype=float).reshape(2)
-        residual = y_gps - self.z[1:3]
+        residual = y_gps - self.z[1:3] # (innovation)
         S = self.H @ self.P @ self.H.T + self.N
         K = np.linalg.solve(S.T, (self.P @ self.H.T).T).T
 

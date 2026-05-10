@@ -34,7 +34,7 @@ from plotting import plot_simplified_car_cases
 dt = 0.01                         # 100 Hz odometry propagation
 T_FINAL = 40.0                     # seconds
 T = int(T_FINAL / dt) + 1
-GPS_DT = 1.0                       # 1 Hz GPS
+GPS_DT = 2.0                       # 1 Hz GPS
 UPDATE_STRIDE = int(GPS_DT / dt)
 
 CIRCLE_DIAMETER = 10.0             # meters
@@ -50,7 +50,7 @@ INITIAL_HEADING_ERRORS_DEG = [1.0, 45.0]
 
 # Keep actual process and measurement noise off to reproduce the deterministic observer comparison.
 # Q and N are still used as EKF/LIEKF design/tuning matrices, as in the paper.
-ADD_SIMULATION_NOISE = False
+ADD_SIMULATION_NOISE = True
 RNG_SEED = 13
 
 
