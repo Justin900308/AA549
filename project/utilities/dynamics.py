@@ -3,6 +3,7 @@ import cvxpy as cp
 import matplotlib.pyplot as plt
 import jax.numpy as jnp
 
+
 def quat_conj(q: jnp.array) -> jnp.array:
     return jnp.array([q[0], -q[1], -q[2], -q[3]])
 
@@ -24,19 +25,22 @@ def quat_rotate(q: jnp.array, v: jnp.array) -> jnp.array:
     v_rot = quat_mul(quat_mul(q, v_quat), quat_conj(q))
     return v_rot[1:]
 
+
 def quat_dynamics(qt: jnp.ndarray, omegat: jnp.ndarray) -> jnp.ndarray:
     qw, qx, qy, qz = qt
     wx, wy, wz = omegat
 
     Omega = jnp.array([
         [0.0, -wx, -wy, -wz],
-        [wx,  0.0,  wz, -wy],
-        [wy, -wz,  0.0, wx],
-        [wz,  wy, -wx, 0.0],
+        [wx, 0.0, wz, -wy],
+        [wy, -wz, 0.0, wx],
+        [wz, wy, -wx, 0.0],
     ])
 
     qdot = 0.5 * Omega @ qt
     return qdot
 
 
-
+def P_pred(Pt, At, Q):
+    Pdot = At @ Pt + Pt @ At.T + Q
+    return Pdot
