@@ -9,7 +9,7 @@ R = 0.4
 mean = 0.0
 
 rng = np.random.default_rng(123321)
-rng = np.random.default_rng(345543)
+
 
 def F_Monte_Carlo(X_1, y):
     Num = np.sum(X_1 * np.exp(-(y - X_1) ** 2 / 2 / R))
@@ -73,7 +73,7 @@ def compute_mse(X1, X_est):
     return np.mean((X1 - X_est) ** 2)
 
 
-# generate data
+# generate data for building the estimator
 X1, Y = gen_samples(N, P, R)
 
 ## HW4 estimators
@@ -85,11 +85,10 @@ Num_samples = [100, 1000, 10000]
 X_Monte = np.zeros([3, N])
 for i in range(3):
     Num_sample = Num_samples[i]
-    X1_i = gen_samples(Num_sample, P, R)
+    X1_i, _ = gen_samples(Num_sample, P, R)
     for j in range(N):
         y = Y[j]
         X_Monte[i, j] = F_Monte_Carlo(X1_i, y)
-
 
 # MSEs
 mse_lin = compute_mse(X1, X_lin)
@@ -103,7 +102,6 @@ for i in range(3):
 print(f"MSE linear: {mse_lin:.6f}")
 print(f"MSE cubic : {mse_cubic:.6f}")
 print(f"MSE sgn   : {mse_sgn:.6f}")
-
 
 # scatter plot
 fig, ax = plt.subplots(figsize=(7, 5))
@@ -120,5 +118,31 @@ ax.set_ylabel(f"$Y$")
 ax.set_title(f"Estimator comparison, $P={P}$, $R={R}$")
 ax.legend()
 plt.tight_layout()
-plt.savefig("HW4.pdf")
+plt.show()
+
+M = 10000
+rng = np.random.default_rng(345543)
+X1_test, Y_test = gen_samples(M, P, R)
+
+Num_samples = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000]
+X_Monte = np.zeros([len(Num_samples), M])
+mse_Monte = np.zeros(len(Num_samples))
+
+for i, Num_sample in enumerate(Num_samples):
+    rng = np.random.default_rng(12331)
+    X1_train, _ = gen_samples(Num_sample, P, R)
+
+    for j in range(M):
+        y = Y_test[j]
+        X_Monte[i, j] = F_Monte_Carlo(X1_train, y)
+
+    mse_Monte[i] = compute_mse(X1_test, X_Monte[i])
+    print(f"N = {Num_sample}, MSE = {mse_Monte[i]:.6f}")
+fig, ax = plt.subplots(figsize=(6, 6))
+# ax.plot(Num_samples, mse_Monte, label="Monte Carlo Mse")
+ax.semilogx(Num_samples, mse_Monte, label="Monte Carlo Mse")
+ax.set_xlabel("N")
+ax.set_ylabel("MSE")
+ax.grid()
+plt.tight_layout()
 plt.show()
