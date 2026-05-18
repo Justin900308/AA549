@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import numpy as np
 
-from dynamics import ekf_A_matrix, gps_H_matrix, propagate_pose_rk4, wrap_angle
-from integrator import covariance_euler
+from dynamics import ekf_A_matrix, gps_H_matrix, wrap_angle, unicycle_dynamics
+from integrator import covariance_euler, rk4
 
 
 class ContinuousDiscreteCarEKF:
@@ -30,7 +30,7 @@ class ContinuousDiscreteCarEKF:
         theta_hat = float(self.z[0])
 
         A = ekf_A_matrix(theta_hat, v)
-        self.z = propagate_pose_rk4(self.z, u, self.dt)
+        self.z = rk4(unicycle_dynamics,self.z, u, self.dt)
         self.P = covariance_euler(self.P, A, self.Q, self.dt)
         self.P += 1e-15 * np.eye(3)
 

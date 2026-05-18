@@ -23,6 +23,8 @@ def plot_simplified_car_cases(results_by_case, save_path: str | None = None):
 
         ax = axes[0, j]
         ax.plot(true[:, 1], true[:, 2], "-", label="True trajectory")
+        ax.plot(true[0, 1], true[0, 2], "r.", markersize=10, label="Initial position")
+        ax.plot(true[-1, 1], true[-1, 2], "g.", markersize=10, label="Final position")
         ax.plot(ekf[:, 1], ekf[:, 2], "--", label="EKF estimate")
         ax.plot(liekf[:, 1], liekf[:, 2], "-", label="LIEKF estimate")
         ax.plot(iscvx[:, 1], iscvx[:, 2], ":", linewidth=2.0, label="ISCVX estimate")

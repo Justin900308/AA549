@@ -26,61 +26,39 @@ import matplotlib.pyplot as plt
 from continuous_discrete_ekf import ContinuousDiscreteCarEKF
 from continuous_discrete_liekf import ContinuousDiscreteCarLIEKF
 from continuous_discrete_iscvx_cvxpy import ContinuousDiscreteCarISCVXCVXPY, CVXPY_AVAILABLE
-from dynamics import heading_error_deg, position_error, propagate_pose_rk4, wrap_angle
+from dynamics import heading_error_deg, position_error, unicycle_dynamics, wrap_angle
 from plotting import plot_simplified_car_cases
-
-
-# Paper parameters.
-dt = 0.01                         # 100 Hz odometry propagation
-T_FINAL = 40.0                     # seconds
-T = int(T_FINAL / dt) + 1
-GPS_DT = 2.0                       # 1 Hz GPS
-UPDATE_STRIDE = int(GPS_DT / dt)
-
-CIRCLE_DIAMETER = 10.0             # meters
-RADIUS = CIRCLE_DIAMETER / 2.0
-omega_const = 2.0 * np.pi / T_FINAL
-v_const = RADIUS * omega_const
-Q = np.diag([(np.pi / 180.0) ** 2, 1e-4, 1e-4]) ## for process noise
-N = np.eye(2) ## for measurement noise
-H0 = np.array([np.pi / 2.0, RADIUS, 0.0])  # starts on a radius-5 circle centered at origin
-
-# The paper's Fig. 1 uses 1 degree and 45 degree initial heading errors.
-INITIAL_HEADING_ERRORS_DEG = [1.0, 45.0]
-
-# Keep actual process and measurement noise off to reproduce the deterministic observer comparison.
-# Q and N are still used as EKF/LIEKF design/tuning matrices, as in the paper.
-ADD_SIMULATION_NOISE = True ## Turn on or off the process noise
-RNG_SEED = 13
+from integrator import rk4
+import constants as ct
 
 
 def control_profile(_t: float) -> np.ndarray:
-    return np.array([v_const, omega_const], dtype=float)
+    return np.array([ct.v_const, ct.omega_const], dtype=float)
 
 
-def traj_simulation(add_noise: bool = ADD_SIMULATION_NOISE):
-    rng = np.random.default_rng(RNG_SEED)
-    time = np.arange(T) * dt
-    true = np.zeros((T, 3))
-    odom = np.zeros((T - 1, 2))
-    gps = np.full((T, 2), np.nan)
-    update_mask = np.zeros(T, dtype=bool)
-    true[0] = H0
+def traj_simulation(add_noise: bool = ct.ADD_SIMULATION_NOISE):
+    rng = np.random.default_rng(ct.RNG_SEED)
+    time = np.arange(ct.T) * ct.dt
+    true = np.zeros((ct.T, 3))
+    odom = np.zeros((ct.T - 1, 2))
+    gps = np.full((ct.T, 2), np.nan)
+    update_mask = np.zeros(ct.T, dtype=bool)
+    true[0] = ct.H0
 
-    for k in range(T - 1):
+    for k in range(ct.T - 1):
         u_true = control_profile(time[k])
         odom[k] = u_true.copy()
         if add_noise:
             # Optional simulated sensor perturbations.  Off by default for paper-style observer tests.
-            beta = rng.multivariate_normal(np.zeros(3), Q)
+            beta = rng.multivariate_normal(np.zeros(3), ct.Q)
             odom[k, 1] += beta[0]
             odom[k, 0] += beta[1]
-        true[k + 1] = propagate_pose_rk4(true[k], u_true, dt)
+        true[k + 1] = rk4(unicycle_dynamics, true[k], u_true, ct.dt)
 
-        if (k + 1) % UPDATE_STRIDE == 0:
+        if (k + 1) % ct.UPDATE_STRIDE == 0:
             gps[k + 1] = true[k + 1, 1:3]
             if add_noise:
-                gps[k + 1] += rng.multivariate_normal(np.zeros(2), N)
+                gps[k + 1] += rng.multivariate_normal(np.zeros(2), ct.N)
             update_mask[k + 1] = True
 
     return time, true, odom, gps, update_mask
@@ -94,14 +72,14 @@ def run_case(initial_heading_error_deg: float):
     # Initial position is assumed known.  A tiny epsilon keeps the covariance numerically well-conditioned.
     P0 = np.diag([np.deg2rad(initial_heading_error_deg) ** 2, 1e-12, 1e-12])
 
-    ekf = ContinuousDiscreteCarEKF(z0=z0, P0=P0, Q=Q, N=N, dt=dt)
-    liekf = ContinuousDiscreteCarLIEKF(z0=z0, P0=P0, Q=Q, N=N, dt=dt)
+    ekf = ContinuousDiscreteCarEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
+    liekf = ContinuousDiscreteCarLIEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
     iscvx = ContinuousDiscreteCarISCVXCVXPY(
         z0=z0,
         P0=P0,
-        Q=Q,
-        N=N,
-        dt=dt,
+        Q=ct.Q,
+        N=ct.N,
+        dt=ct.dt,
         trust_radius=0.5,
         max_scp_iters=5,
         solver=None,
@@ -115,7 +93,7 @@ def run_case(initial_heading_error_deg: float):
     z_liekf[0] = liekf.z
     z_iscvx[0] = iscvx.z
 
-    for k in range(T - 1):
+    for k in range(ct.T - 1):
         yk = gps[k + 1] if update_mask[k + 1] else None
         z_ekf[k + 1] = ekf.step(odom[k], yk)
         z_liekf[k + 1] = liekf.step(odom[k], yk)
@@ -143,12 +121,12 @@ def run_case(initial_heading_error_deg: float):
         "position_error_ekf_m": pos_ekf,
         "position_error_liekf_m": pos_liekf,
         "position_error_iscvx_m": pos_iscvx,
-        "ekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_ekf**2))),
-        "liekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_liekf**2))),
-        "iscvx_heading_rmse_deg": float(np.sqrt(np.mean(heading_iscvx**2))),
-        "ekf_position_rmse_m": float(np.sqrt(np.mean(pos_ekf**2))),
-        "liekf_position_rmse_m": float(np.sqrt(np.mean(pos_liekf**2))),
-        "iscvx_position_rmse_m": float(np.sqrt(np.mean(pos_iscvx**2))),
+        "ekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_ekf ** 2))),
+        "liekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_liekf ** 2))),
+        "iscvx_heading_rmse_deg": float(np.sqrt(np.mean(heading_iscvx ** 2))),
+        "ekf_position_rmse_m": float(np.sqrt(np.mean(pos_ekf ** 2))),
+        "liekf_position_rmse_m": float(np.sqrt(np.mean(pos_liekf ** 2))),
+        "iscvx_position_rmse_m": float(np.sqrt(np.mean(pos_iscvx ** 2))),
         "ekf_final_heading_error_deg": float(heading_ekf[-1]),
         "liekf_final_heading_error_deg": float(heading_liekf[-1]),
         "iscvx_final_heading_error_deg": float(heading_iscvx[-1]),
@@ -161,17 +139,17 @@ def run_case(initial_heading_error_deg: float):
 
 
 def Estimator_sim():
-    return [run_case(err) for err in INITIAL_HEADING_ERRORS_DEG]
+    return [run_case(err) for err in ct.INITIAL_HEADING_ERRORS_DEG]
 
 
 if __name__ == "__main__":
     results = Estimator_sim()
     print("Simplified-car paper replication parameters")
-    print(f"  dt = {dt:.3f} s, odometry rate = {1/dt:.0f} Hz")
-    print(f"  GPS update period = {UPDATE_STRIDE} dt = {GPS_DT:.1f} s")
-    print(f"  circle diameter = {CIRCLE_DIAMETER:.1f} m, final time = {T_FINAL:.1f} s")
-    print(f"  v = {v_const:.6f} m/s, omega = {omega_const:.6f} rad/s")
-    print(f"  Q = diag({Q[0,0]:.8e}, {Q[1,1]:.1e}, {Q[2,2]:.1e})")
+    print(f"  dt = {ct.dt:.3f} s, odometry rate = {1 / ct.dt:.0f} Hz")
+    print(f"  GPS update period = {ct.UPDATE_STRIDE} dt = {ct.GPS_DT:.1f} s")
+    print(f"  circle diameter = {ct.CIRCLE_DIAMETER:.1f} m, final time = {ct.T_FINAL:.1f} s")
+    print(f"  v = {ct.v_const:.6f} m/s, omega = {ct.omega_const:.6f} rad/s")
+    print(f"  Q = diag({ct.Q[0, 0]:.8e}, {ct.Q[1, 1]:.1e}, {ct.Q[2, 2]:.1e})")
     print("  N = I_2")
     print(f"  CVXPY available: {CVXPY_AVAILABLE}")
     if not CVXPY_AVAILABLE:
@@ -206,9 +184,12 @@ if __name__ == "__main__":
         print(f"  EKF   position RMSE: {res['ekf_position_rmse_m']:.4f} m")
         print(f"  LIEKF position RMSE: {res['liekf_position_rmse_m']:.4f} m")
         print(f"  ISCVX position RMSE: {res['iscvx_position_rmse_m']:.4f} m")
-        print(f"  EKF   final errors: heading={res['ekf_final_heading_error_deg']:.4f} deg, pos={res['ekf_final_position_error_m']:.4f} m")
-        print(f"  LIEKF final errors: heading={res['liekf_final_heading_error_deg']:.4f} deg, pos={res['liekf_final_position_error_m']:.4f} m")
-        print(f"  ISCVX final errors: heading={res['iscvx_final_heading_error_deg']:.4f} deg, pos={res['iscvx_final_position_error_m']:.4f} m")
+        print(
+            f"  EKF   final errors: heading={res['ekf_final_heading_error_deg']:.4f} deg, pos={res['ekf_final_position_error_m']:.4f} m")
+        print(
+            f"  LIEKF final errors: heading={res['liekf_final_heading_error_deg']:.4f} deg, pos={res['liekf_final_position_error_m']:.4f} m")
+        print(
+            f"  ISCVX final errors: heading={res['iscvx_final_heading_error_deg']:.4f} deg, pos={res['iscvx_final_position_error_m']:.4f} m")
         print()
 
     out_dir = Path(__file__).resolve().parent

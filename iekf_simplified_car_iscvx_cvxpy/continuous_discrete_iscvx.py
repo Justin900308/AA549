@@ -26,11 +26,11 @@ from dynamics import (
     inv_retract_SE2,
     liekf_A_matrix,
     prior_residual_jacobian_SE2,
-    propagate_pose_rk4,
+    unicycle_dynamics,
     retract_SE2,
     wrap_angle,
 )
-from integrator import covariance_euler
+from integrator import covariance_euler,rk4
 
 
 class ContinuousDiscreteCarISCVX:
@@ -63,7 +63,7 @@ class ContinuousDiscreteCarISCVX:
         v, omega = float(u[0]), float(u[1])
         A = liekf_A_matrix(v, omega)
 
-        self.z = propagate_pose_rk4(self.z, u, self.dt)
+        self.z = rk4(unicycle_dynamics,self.z, u, self.dt)
         self.P = covariance_euler(self.P, A, self.Q, self.dt)
         self.P = 0.5 * (self.P + self.P.T)
         self.P += 1e-15 * np.eye(3)

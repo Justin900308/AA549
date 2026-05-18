@@ -27,12 +27,12 @@ from dynamics import (
     liekf_A_matrix,
     liekf_left_gps_residual,
     pose_to_SE2,
-    propagate_pose_rk4,
+    unicycle_dynamics,
     rot2,
     se2_exp,
     wrap_angle,
 )
-from integrator import covariance_euler
+from integrator import covariance_euler,rk4
 
 
 class ContinuousDiscreteCarLIEKF:
@@ -51,7 +51,7 @@ class ContinuousDiscreteCarLIEKF:
         A = liekf_A_matrix(v, omega)
 
         # State propagation is the same chi_dot = chi nu, written in coordinates.
-        self.z = propagate_pose_rk4(self.z, u, self.dt)
+        self.z = rk4(unicycle_dynamics,self.z, u, self.dt)
         self.P = covariance_euler(self.P, A, self.Q, self.dt)
         self.P += 1e-15 * np.eye(3)
 

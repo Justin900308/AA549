@@ -15,11 +15,17 @@ and the SE(2) embedding
 from __future__ import annotations
 
 import numpy as np
+import jax.numpy as jnp
 
 
-def wrap_angle(angle: float | np.ndarray) -> float | np.ndarray:
+def wrap_angle(angle):
     """Wrap angle(s) to [-pi, pi)."""
     return (angle + np.pi) % (2.0 * np.pi) - np.pi
+
+
+def wrap_angle_jax(angle):
+    """Wrap angle(s) to [-pi, pi)."""
+    return (angle + jnp.pi) % (2.0 * jnp.pi) - jnp.pi
 
 
 def rot2(theta: float) -> np.ndarray:
@@ -35,6 +41,13 @@ def unicycle_dynamics(z: np.ndarray, u: np.ndarray) -> np.ndarray:
     return np.array([omega, np.cos(theta) * v, np.sin(theta) * v], dtype=float)
 
 
+def unicycle_dynamics_jax(z, u) -> jnp.ndarray:
+    """Continuous unicycle dynamics z=[theta, x, y], u=[v, omega]."""
+    theta = z[0]
+    v, omega = u[0], u[1]
+    return jnp.array([omega, jnp.cos(theta) * v, jnp.sin(theta) * v], dtype=float)
+
+
 def ekf_A_matrix(theta_hat: float, v: float) -> np.ndarray:
     """Standard EKF linearized error matrix F_t from the paper's Sec. IV-D.
 
@@ -44,7 +57,7 @@ def ekf_A_matrix(theta_hat: float, v: float) -> np.ndarray:
         [
             [0.0, 0.0, 0.0],
             [-np.sin(theta_hat) * v, 0.0, 0.0],
-            [ np.cos(theta_hat) * v, 0.0, 0.0],
+            [np.cos(theta_hat) * v, 0.0, 0.0],
         ],
         dtype=float,
     )
@@ -104,8 +117,8 @@ def se2_exp(xi: np.ndarray) -> np.ndarray:
 
     if abs(alpha) < 1e-10:
         # V = I + alpha/2 J + alpha^2/6 J^2 + ...
-        A = 1.0 - alpha**2 / 6.0 + alpha**4 / 120.0
-        B = alpha / 2.0 - alpha**3 / 24.0 + alpha**5 / 720.0
+        A = 1.0 - alpha ** 2 / 6.0 + alpha ** 4 / 120.0
+        B = alpha / 2.0 - alpha ** 3 / 24.0 + alpha ** 5 / 720.0
     else:
         A = np.sin(alpha) / alpha
         B = (1.0 - np.cos(alpha)) / alpha
@@ -116,19 +129,6 @@ def se2_exp(xi: np.ndarray) -> np.ndarray:
     chi[:2, :2] = R
     chi[:2, 2] = t
     return chi
-
-
-def propagate_pose_rk4(z: np.ndarray, u: np.ndarray, dt: float) -> np.ndarray:
-    """One RK4 step for the unicycle state."""
-    z = np.asarray(z, dtype=float).reshape(3)
-    u = np.asarray(u, dtype=float).reshape(2)
-    k1 = unicycle_dynamics(z, u)
-    k2 = unicycle_dynamics(z + 0.5 * dt * k1, u)
-    k3 = unicycle_dynamics(z + 0.5 * dt * k2, u)
-    k4 = unicycle_dynamics(z + dt * k3, u)
-    zp1 = z + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
-    zp1[0] = wrap_angle(zp1[0])
-    return zp1
 
 
 def liekf_left_gps_residual(z_hat: np.ndarray, y_gps: np.ndarray) -> np.ndarray:
@@ -166,8 +166,8 @@ def se2_log(chi: np.ndarray) -> np.ndarray:
     t = chi[:2, 2]
 
     if abs(alpha) < 1e-10:
-        A = 1.0 - alpha**2 / 6.0 + alpha**4 / 120.0
-        B = alpha / 2.0 - alpha**3 / 24.0 + alpha**5 / 720.0
+        A = 1.0 - alpha ** 2 / 6.0 + alpha ** 4 / 120.0
+        B = alpha / 2.0 - alpha ** 3 / 24.0 + alpha ** 5 / 720.0
     else:
         A = np.sin(alpha) / alpha
         B = (1.0 - np.cos(alpha)) / alpha
@@ -210,6 +210,7 @@ def numerical_jacobian_zero(fun, xdim: int, eps: float = 1e-6) -> np.ndarray:
 
 def prior_residual_jacobian_SE2(z_pred: np.ndarray, z_iter: np.ndarray) -> np.ndarray:
     """Jp = d/deta Log(chi_pred^{-1} chi_iter Exp(eta)) at eta=0."""
+
     def prior_pert(eta):
         return inv_retract_SE2(z_pred, retract_SE2(z_iter, eta))
 
@@ -218,6 +219,7 @@ def prior_residual_jacobian_SE2(z_pred: np.ndarray, z_iter: np.ndarray) -> np.nd
 
 def gps_measurement_jacobian_intrinsic(z_iter: np.ndarray) -> np.ndarray:
     """H = d/deta h(chi_iter Exp(eta)) at eta=0."""
+
     def meas_pert(eta):
         return gps_measurement_model(retract_SE2(z_iter, eta))
 
