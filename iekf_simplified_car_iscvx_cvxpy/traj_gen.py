@@ -115,7 +115,7 @@ def penalty_regulation(true_cost_list, iter, lambd):
     return lambd
 
 
-def traj_gen(x_traj, u_traj) -> tuple:
+def traj_gen_fun(x_traj, u_traj) -> tuple:
     max_iter = 15
     lambd = 0.2
     true_cost_old = 0
@@ -151,31 +151,31 @@ def traj_gen(x_traj, u_traj) -> tuple:
         print("cost diff:   ", np.abs(true_cost_old - true_cost))
         if np.abs(true_cost_old - true_cost) <= 0.001:
             print("Sol converged")
-            plt.plot(time_traj, v_norm_traj, ".")
-            plt.show()
+            # plt.plot(time_traj, v_norm_traj, ".")
+            # plt.show()
             break
 
         # if np.abs(subproblem_cost_old - subproblem_cost) <= 0.01 or iter > 25:
         #     plotting3d_fcn(x_traj, Q_traj)
         true_cost_old = true_cost
-    ## plotting
-    fig, ax = plt.subplots(figsize = (10,5))
-    ax.plot(x_des[1], x_des[2], "r.", label="x_des")
-    ax.plot(x_0[1], x_0[2], "g.", label="x_ini")
-    for i in range(num_obs):
-        circle = Circle((obs[i,0], obs[i,1]), obs_r, fill=False, linewidth=2)
-        ax.add_patch(circle)
-    for t in range(T-1):
-        ax.plot(x_traj[t,1],x_traj[t,2],'b.')
-        ax.set_xlim([0,10])
-        ax.set_ylim([0,6])
-        plt.pause(0.1)
-    ax.plot(x_traj[:, 1], x_traj[:, 2], "b-")
-    ax.legend()
-    plt.show()
+    # ## plotting
+    # fig, ax = plt.subplots(figsize = (10,5))
+    # ax.plot(x_des[1], x_des[2], "r.", label="x_des")
+    # ax.plot(x_0[1], x_0[2], "g.", label="x_ini")
+    # for i in range(num_obs):
+    #     circle = Circle((obs[i,0], obs[i,1]), obs_r, fill=False, linewidth=2)
+    #     ax.add_patch(circle)
+    # for t in range(T-1):
+    #     ax.plot(x_traj[t,1],x_traj[t,2],'b.')
+    #     ax.set_xlim([0,10])
+    #     ax.set_ylim([0,6])
+    #     plt.pause(0.1)
+    # ax.plot(x_traj[:, 1], x_traj[:, 2], "b-")
+    # ax.legend()
+    # plt.show()
 
     return x_traj, u_traj, Jacobians
 
 
 #
-[x_traj, u_traj, Jacobians] = traj_gen(x_traj, u_traj)
+# [x_traj, u_traj, Jacobians] = traj_gen(x_traj, u_traj)

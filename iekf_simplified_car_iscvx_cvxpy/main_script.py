@@ -30,23 +30,31 @@ from dynamics import heading_error_deg, position_error, unicycle_dynamics, wrap_
 from plotting import plot_simplified_car_cases
 from integrator import rk4
 import constants as ct
+from traj_gen import traj_gen_fun
 
 
 def control_profile(_t: float) -> np.ndarray:
     return np.array([ct.v_const, ct.omega_const], dtype=float)
 
 
-def traj_simulation(add_noise: bool = ct.ADD_SIMULATION_NOISE):
+def traj_simulation(z_traj, u_traj, add_noise: bool = ct.ADD_SIMULATION_NOISE):
     rng = np.random.default_rng(ct.RNG_SEED)
     time = np.arange(ct.T) * ct.dt
     true = np.zeros((ct.T, 3))
     odom = np.zeros((ct.T - 1, 2))
     gps = np.full((ct.T, 2), np.nan)
     update_mask = np.zeros(ct.T, dtype=bool)
-    true[0] = ct.H0
-
+    dt_ratio = ct.dt_traj_gen / ct.dt
+    control_count = 0
     for k in range(ct.T - 1):
-        u_true = control_profile(time[k])
+        # u_true = control_profile(time[k])
+        u_true = u_traj[control_count]
+        if k % dt_ratio == 0:
+            control_count += 1
+            if control_count == ct.T_traj_gen - 1:
+                control_count -= 1
+            print(control_count, k)
+
         odom[k] = u_true.copy()
         if add_noise:
             # Optional simulated sensor perturbations.  Off by default for paper-style observer tests.
@@ -65,8 +73,12 @@ def traj_simulation(add_noise: bool = ct.ADD_SIMULATION_NOISE):
 
 
 def run_case(initial_heading_error_deg: float):
-    time, true, odom, gps, update_mask = traj_simulation()
+    z_traj = np.zeros([ct.T_traj_gen, ct.n])
+    z_traj[0] = ct.z_0
+    u_traj = np.zeros([ct.T_traj_gen - 1, ct.m])
+    [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
 
+    time, true, odom, gps, update_mask = traj_simulation(z_traj, u_traj)
     z0 = true[0].copy()
     z0[0] = wrap_angle(z0[0] + np.deg2rad(initial_heading_error_deg))
     # Initial position is assumed known.  A tiny epsilon keeps the covariance numerically well-conditioned.

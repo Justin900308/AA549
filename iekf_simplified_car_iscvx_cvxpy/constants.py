@@ -23,9 +23,10 @@ from pathlib import Path
 import numpy as np
 
 # Paper parameters.
-dt = 0.01  # 100 Hz odometry propagation
-dt_traj_gen = 0.5
-T_FINAL = 40.0  # seconds
+dt = 0.1  # 100 Hz odometry propagation
+dt_ratio = 1
+dt_traj_gen = dt_ratio*dt
+T_FINAL = 20.0  # seconds
 T = int(T_FINAL / dt) + 1
 T_traj_gen = int(T_FINAL / dt_traj_gen) + 1
 GPS_DT = 4  # 1 Hz GPS
@@ -35,6 +36,7 @@ m = 2
 num_obs = 2
 obs = np.array([[4, 3], [8, 3]]) * 1
 obs_r = 1.5
+z_0 = np.zeros(n)
 z_des = np.array([0, 10, 5.5])
 
 CIRCLE_DIAMETER = 10.0  # meters
