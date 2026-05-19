@@ -25,7 +25,9 @@ import matplotlib.pyplot as plt
 
 from continuous_discrete_ekf import ContinuousDiscreteCarEKF
 from continuous_discrete_liekf import ContinuousDiscreteCarLIEKF
-from continuous_discrete_iscvx_cvxpy import ContinuousDiscreteCarISCVXCVXPY, CVXPY_AVAILABLE
+# from continuous_discrete_iscvx_cvxpy import ContinuousDiscreteCarISCVXCVXPY, CVXPY_AVAILABLE
+# from continuous_discrete_iscvx_cvxpy_obstacle import ContinuousDiscreteCarISCVXCVXPY
+from continuous_discrete_iscvx_cvxpy_obstacle_objstop import ContinuousDiscreteCarISCVXCVXPY
 from dynamics import heading_error_deg, position_error, unicycle_dynamics, wrap_angle
 from plotting import plot_simplified_car_cases
 from integrator import rk4
@@ -53,7 +55,6 @@ def traj_simulation(z_traj, u_traj, add_noise: bool = ct.ADD_SIMULATION_NOISE):
             control_count += 1
             if control_count == ct.T_traj_gen - 1:
                 control_count -= 1
-            print(control_count, k)
 
         odom[k] = u_true.copy()
         if add_noise:
@@ -73,11 +74,6 @@ def traj_simulation(z_traj, u_traj, add_noise: bool = ct.ADD_SIMULATION_NOISE):
 
 
 def run_case(initial_heading_error_deg: float):
-    z_traj = np.zeros([ct.T_traj_gen, ct.n])
-    z_traj[0] = ct.z_0
-    u_traj = np.zeros([ct.T_traj_gen - 1, ct.m])
-    [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
-
     time, true, odom, gps, update_mask = traj_simulation(z_traj, u_traj)
     z0 = true[0].copy()
     z0[0] = wrap_angle(z0[0] + np.deg2rad(initial_heading_error_deg))
@@ -86,6 +82,17 @@ def run_case(initial_heading_error_deg: float):
 
     ekf = ContinuousDiscreteCarEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
     liekf = ContinuousDiscreteCarLIEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
+    # iscvx = ContinuousDiscreteCarISCVXCVXPY(
+    #     z0=z0,
+    #     P0=P0,
+    #     Q=ct.Q,
+    #     N=ct.N,
+    #     dt=ct.dt,
+    #     trust_radius=0.5,
+    #     max_scp_iters=5,
+    #     solver=None,
+    #     fallback_without_cvxpy=True,
+    # )
     iscvx = ContinuousDiscreteCarISCVXCVXPY(
         z0=z0,
         P0=P0,
@@ -94,8 +101,8 @@ def run_case(initial_heading_error_deg: float):
         dt=ct.dt,
         trust_radius=0.5,
         max_scp_iters=5,
-        solver=None,
-        fallback_without_cvxpy=True,
+        obs=ct.obs,
+        obs_r=ct.obs_r,
     )
 
     z_ekf = np.zeros_like(true)
@@ -155,6 +162,10 @@ def Estimator_sim():
 
 
 if __name__ == "__main__":
+    z_traj = np.zeros([ct.T_traj_gen, ct.n])
+    z_traj[0] = ct.z_0
+    u_traj = np.zeros([ct.T_traj_gen - 1, ct.m])
+    [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
     results = Estimator_sim()
     print("Simplified-car paper replication parameters")
     print(f"  dt = {ct.dt:.3f} s, odometry rate = {1 / ct.dt:.0f} Hz")
@@ -163,10 +174,6 @@ if __name__ == "__main__":
     print(f"  v = {ct.v_const:.6f} m/s, omega = {ct.omega_const:.6f} rad/s")
     print(f"  Q = diag({ct.Q[0, 0]:.8e}, {ct.Q[1, 1]:.1e}, {ct.Q[2, 2]:.1e})")
     print("  N = I_2")
-    print(f"  CVXPY available: {CVXPY_AVAILABLE}")
-    if not CVXPY_AVAILABLE:
-        print("  CVXPY backend requested, but cvxpy is not installed here; direct QP fallback is enabled.")
-    print()
 
     summary = []
     for res in results:
