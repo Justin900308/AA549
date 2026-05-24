@@ -125,7 +125,7 @@ for i in range(Num_cases):
     MSE.append(MSE_compute(X_est[i], X_data))
 
 #### plotting
-fig, ax = plt.subplots(Num_cases, 2, figsize=(4, 12))
+fig, ax = plt.subplots(Num_cases, 2, figsize=(8, 12))
 for i in range(Num_cases):
     ## for position
     ax[i, 0].plot(X_data[:, 0], X_data[:, 1], "r.", markersize=10, label="True traj")
@@ -141,6 +141,7 @@ for i in range(Num_cases):
     ax[i, 1].legend()
 
 plt.tight_layout()
+plt.savefig('state_compare.pdf')
 plt.show()
 
 fig, ax = plt.subplots(figsize=(4, 4))
@@ -150,4 +151,5 @@ for i in range(Num_cases):
     ax.set_xlabel("step (k)")
     ax.set_ylabel("MSE")
 plt.tight_layout()
+plt.savefig('MSE_compare.pdf')
 plt.show()
