@@ -27,13 +27,19 @@ from continuous_discrete_ekf import ContinuousDiscreteCarEKF
 from continuous_discrete_liekf import ContinuousDiscreteCarLIEKF
 # from continuous_discrete_iscvx_cvxpy import ContinuousDiscreteCarISCVXCVXPY, CVXPY_AVAILABLE
 # from continuous_discrete_iscvx_cvxpy_obstacle import ContinuousDiscreteCarISCVXCVXPY
-from continuous_discrete_iscvx_cvxpy_obstacle_objstop import ContinuousDiscreteCarISCVXCVXPY
+# from continuous_discrete_iscvx_cvxpy_obstacle_objstop import ContinuousDiscreteCarISCVXCVXPY
+from iscvx_cvxpy_l2_backtracking import ContinuousDiscreteCarISCVXCVXPY
 from dynamics import heading_error_deg, position_error, unicycle_dynamics, wrap_angle
 from plotting import plot_simplified_car_cases
 from integrator import rk4
 import constants as ct
 from traj_gen import traj_gen_fun
 
+#### Select case
+Case = 1  ## for the circle example
+
+
+Case = 2 ## for the constrained case
 
 def control_profile(_t: float) -> np.ndarray:
     return np.array([ct.v_const, ct.omega_const], dtype=float)
@@ -49,8 +55,10 @@ def traj_simulation(z_traj, u_traj, add_noise: bool = ct.ADD_SIMULATION_NOISE):
     dt_ratio = ct.dt_traj_gen / ct.dt
     control_count = 0
     for k in range(ct.T - 1):
-        # u_true = control_profile(time[k])
-        u_true = u_traj[control_count]
+        if Case == 1:
+            u_true = control_profile(time[k])
+        else:
+            u_true = u_traj[control_count]
         if k % dt_ratio == 0:
             control_count += 1
             if control_count == ct.T_traj_gen - 1:
@@ -82,6 +90,10 @@ def run_case(initial_heading_error_deg: float):
 
     ekf = ContinuousDiscreteCarEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
     liekf = ContinuousDiscreteCarLIEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
+    if Case == 1:
+        constraint_flag = False,
+    else:
+        constraint_flag = True
     # iscvx = ContinuousDiscreteCarISCVXCVXPY(
     #     z0=z0,
     #     P0=P0,
@@ -93,13 +105,26 @@ def run_case(initial_heading_error_deg: float):
     #     solver=None,
     #     fallback_without_cvxpy=True,
     # )
+
+    # iscvx = ContinuousDiscreteCarISCVXCVXPY(
+    #     z0=z0,
+    #     P0=P0,
+    #     Q=ct.Q,
+    #     N=ct.N,
+    #     dt=ct.dt,
+    #     trust_radius=0.5,
+    #     max_scp_iters=5,
+    #     obs=ct.obs,
+    #     obs_r=ct.obs_r,
+    # )
+
     iscvx = ContinuousDiscreteCarISCVXCVXPY(
         z0=z0,
         P0=P0,
         Q=ct.Q,
         N=ct.N,
         dt=ct.dt,
-        trust_radius=0.5,
+        flag = constraint_flag,
         max_scp_iters=5,
         obs=ct.obs,
         obs_r=ct.obs_r,
@@ -165,7 +190,8 @@ if __name__ == "__main__":
     z_traj = np.zeros([ct.T_traj_gen, ct.n])
     z_traj[0] = ct.z_0
     u_traj = np.zeros([ct.T_traj_gen - 1, ct.m])
-    [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
+    if Case == 2:
+        [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
     results = Estimator_sim()
     print("Simplified-car paper replication parameters")
     print(f"  dt = {ct.dt:.3f} s, odometry rate = {1 / ct.dt:.0f} Hz")

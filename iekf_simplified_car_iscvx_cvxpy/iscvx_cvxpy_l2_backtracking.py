@@ -70,6 +70,7 @@ class ContinuousDiscreteCarISCVXCVXPY:
         Q,
         N,
         dt: float,
+        flag: bool,
         l2_reg_initial: float = 1e-4,
         l2_reg_growth: float = 10.0,
         max_backtracking: int = 8,
@@ -95,6 +96,7 @@ class ContinuousDiscreteCarISCVXCVXPY:
         # Kept only for backward-compatible construction.  This version always
         # uses CVXPY because the conditioning step may include obstacle constraints.
         self.fallback_without_cvxpy = bool(fallback_without_cvxpy)
+        self.flag = flag
         self.obs = _format_obstacles(obs)
         self.obs_r = float(obs_r)
         self.used_cvxpy = False
@@ -141,6 +143,7 @@ class ContinuousDiscreteCarISCVXCVXPY:
             tol=self.tol,
             solver=self.solver,
             fallback_without_cvxpy=self.fallback_without_cvxpy,
+            flag = self.flag,
             obs=self.obs,
             obs_r=self.obs_r,
         )
@@ -200,6 +203,7 @@ def _make_psd(A: np.ndarray, eps: float = 1e-10) -> np.ndarray:
 def _obstacle_constraints(
     eta,
     z_lin: np.ndarray,
+    flag: bool,
     obs: np.ndarray | None,
     obs_r: float,
     position_jacobian: np.ndarray | None,
@@ -234,14 +238,14 @@ def _obstacle_constraints(
     else:
         H_p = np.asarray(position_jacobian, dtype=float).reshape(2, -1)
         delta_p = H_p @ eta
-
     constraints = []
-    for obs_j in obs_arr:
-        diff = p_iter - obs_j
-        h_j = r**2 - diff @ diff
-        a_j = -2.0 * diff
-        lhs = h_j + a_j @ delta_p
-        constraints.append(lhs <= 0.0)
+    if flag == True:
+        for obs_j in obs_arr:
+            diff = p_iter - obs_j
+            h_j = r**2 - diff @ diff
+            a_j = -2.0 * diff
+            lhs = h_j + a_j @ delta_p
+            constraints.append(lhs <= 0.0)
 
     return constraints
 
@@ -261,6 +265,7 @@ def solve_regularized_qp_cvxpy(
     l2_reg_weight: float,
     solver: str | None = None,
     z_lin: np.ndarray | None = None,
+    flag: bool = True,
     obs: np.ndarray | None = None,
     obs_r: float = 0.0,
     use_position_jacobian_for_obstacles: bool = True,
@@ -307,6 +312,7 @@ def solve_regularized_qp_cvxpy(
     constraints = _obstacle_constraints(
         eta=eta,
         z_lin=np.asarray(z_lin, dtype=float).reshape(3),
+        flag = flag,
         obs=obs_arr,
         obs_r=float(obs_r),
         position_jacobian=H_p,
@@ -383,6 +389,7 @@ def intrinsic_cvxpy_update_SE2(
     tol: float = 1e-9,
     solver: str | None = None,
     fallback_without_cvxpy: bool = False,
+    flag: bool = True,
     obs: np.ndarray | None = None,
     obs_r: float = 0.0,
 ) -> tuple[np.ndarray, np.ndarray, bool, dict]:
@@ -457,6 +464,7 @@ def intrinsic_cvxpy_update_SE2(
                 l2_reg_weight=trial_rho,
                 solver=solver,
                 z_lin=z_iter,
+                flag = flag,
                 obs=obs_arr,
                 obs_r=obs_r,
                 use_position_jacobian_for_obstacles=True,
