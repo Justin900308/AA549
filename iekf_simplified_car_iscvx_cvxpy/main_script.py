@@ -38,8 +38,8 @@ from traj_gen import traj_gen_fun
 #### Select case
 Case = 1  ## for the circle example
 
+Case = 2  ## for the constrained case
 
-Case = 2 ## for the constrained case
 
 def control_profile(_t: float) -> np.ndarray:
     return np.array([ct.v_const, ct.omega_const], dtype=float)
@@ -124,7 +124,7 @@ def run_case(initial_heading_error_deg: float):
         Q=ct.Q,
         N=ct.N,
         dt=ct.dt,
-        flag = constraint_flag,
+        flag=constraint_flag,
         max_scp_iters=5,
         obs=ct.obs,
         obs_r=ct.obs_r,
@@ -241,5 +241,6 @@ if __name__ == "__main__":
     with open(out_dir / "summary.json", "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2)
 
-    plot_simplified_car_cases(results, save_path=str(out_dir / "simplified_car_ekf_liekf_iscvx_cvxpy_comparison.png"))
+    plot_simplified_car_cases(Case, results,
+                              save_path=str(out_dir / "simplified_car_ekf_liekf_iscvx_cvxpy_comparison.png"))
     plt.show()

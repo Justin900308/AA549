@@ -8,7 +8,7 @@ import constants as ct
 from matplotlib.patches import Circle
 
 
-def plot_simplified_car_cases(results_by_case, save_path: str | None = None):
+def plot_simplified_car_cases(case,results_by_case, save_path: str | None = None):
     """Create a Fig. 1 style comparison: trajectory, heading error, position error."""
     n_cases = len(results_by_case)
     fig, axes = plt.subplots(3, n_cases, figsize=(6.2 * n_cases, 9.0), constrained_layout=True)
@@ -30,12 +30,13 @@ def plot_simplified_car_cases(results_by_case, save_path: str | None = None):
         ax.plot(ekf[:, 1], ekf[:, 2], "--", label="EKF estimate")
         ax.plot(liekf[:, 1], liekf[:, 2], "-", label="LIEKF estimate")
         ax.plot(iscvx[:, 1], iscvx[:, 2], ":", linewidth=2.0, label="ISCVX estimate")
-        for i in range(ct.num_obs):
-            circle = Circle((ct.obs[i,0], ct.obs[i,1]), ct.obs_r, fill=False, linewidth=2)
-            ax.add_patch(circle)
-        ax.set_title(f"Estimated trajectory, $e_\\theta(0)={init_deg:g}^\\circ$")
-        ax.set_xlabel("x position (m)")
-        ax.set_ylabel("y position (m)")
+        if case == 2:
+            for i in range(ct.num_obs):
+                circle = Circle((ct.obs[i,0], ct.obs[i,1]), ct.obs_r, fill=False, linewidth=2)
+                ax.add_patch(circle)
+        # ax.set_title(f"Estimated trajectory, $e_\\theta(0)={init_deg:g}^\\circ$")
+        ax.set_xlabel("x (m)")
+        ax.set_ylabel("y (m)")
         ax.axis("equal")
         ax.grid(True)
         ax.legend(loc="best", fontsize=8)
@@ -44,9 +45,9 @@ def plot_simplified_car_cases(results_by_case, save_path: str | None = None):
         ax.plot(t, res["heading_error_ekf_deg"], "--", label="EKF")
         ax.plot(t, res["heading_error_liekf_deg"], "-", label="LIEKF")
         ax.plot(t, res["heading_error_iscvx_deg"], ":", linewidth=2.0, label="ISCVX")
-        ax.set_title("Attitude error (degrees)")
+        # ax.set_title("Attitude error (degrees)")
         ax.set_xlabel("time (s)")
-        ax.set_ylabel("|heading error| (deg)")
+        ax.set_ylabel("heading error (deg)")
         ax.grid(True)
         ax.legend(loc="best", fontsize=8)
 
@@ -54,7 +55,7 @@ def plot_simplified_car_cases(results_by_case, save_path: str | None = None):
         ax.plot(t, res["position_error_ekf_m"], "--", label="EKF")
         ax.plot(t, res["position_error_liekf_m"], "-", label="LIEKF")
         ax.plot(t, res["position_error_iscvx_m"], ":", linewidth=2.0, label="ISCVX")
-        ax.set_title("Position error (m)")
+        # ax.set_title("Position error (m)")
         ax.set_xlabel("time (s)")
         ax.set_ylabel("position error (m)")
         ax.grid(True)
