@@ -38,6 +38,7 @@ from traj_gen import traj_gen_fun
 #### Select case
 Case = 1  ## for the circle example
 
+
 Case = 2  ## for the constrained case
 
 
@@ -136,13 +137,26 @@ def run_case(initial_heading_error_deg: float):
     z_ekf[0] = ekf.z
     z_liekf[0] = liekf.z
     z_iscvx[0] = iscvx.z
-
+    condition_times_avg = np.zeros(3)
+    count = 0
     for k in range(ct.T - 1):
-        yk = gps[k + 1] if update_mask[k + 1] else None
+        if update_mask[k + 1]:
+            yk = gps[k + 1]
+            ekf_t = ekf.update_t
+            liekf_t = liekf.update_t
+            iscvx_t = iscvx.update_t
+            if ekf_t is not None:
+                print(rf"update time  for EKF: {ekf_t}, for LIEKF: {liekf_t}, and for ISCVX-EKF {iscvx_t}")
+                condition_times_avg += np.array([ekf_t, liekf_t, iscvx_t])
+                count += 1
+        else:
+            yk = None
+
         z_ekf[k + 1] = ekf.step(odom[k], yk)
         z_liekf[k + 1] = liekf.step(odom[k], yk)
         z_iscvx[k + 1] = iscvx.step(odom[k], yk)
-
+    condition_times_avg /= count
+    print(rf"average condition time {condition_times_avg}")
     heading_ekf = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_ekf)])
     heading_liekf = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_liekf)])
     heading_iscvx = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_iscvx)])
@@ -179,6 +193,7 @@ def run_case(initial_heading_error_deg: float):
         "iscvx_final_position_error_m": float(pos_iscvx[-1]),
         "iscvx_used_cvxpy": bool(iscvx.used_cvxpy),
         "iscvx_used_fallback": bool(iscvx.used_fallback),
+        "condition_times": condition_times_avg
     }
 
 

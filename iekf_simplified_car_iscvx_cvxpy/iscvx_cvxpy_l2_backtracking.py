@@ -34,7 +34,7 @@ local linearization is poor.
 from __future__ import annotations
 
 import numpy as np
-
+import time
 try:  # optional dependency
     import cvxpy as cp
     CVXPY_AVAILABLE = True
@@ -106,7 +106,7 @@ class ContinuousDiscreteCarISCVXCVXPY:
         self.last_l2_reg_weight = self.l2_reg_initial
         self.last_backtracking_steps = 0
         self.last_rejected_step = False
-
+        self.update_t = None
         if not CVXPY_AVAILABLE:
             raise ImportError(
                 "cvxpy is required because the ISCVX conditioning step is solved "
@@ -131,6 +131,7 @@ class ContinuousDiscreteCarISCVXCVXPY:
         self.P += 1e-15 * np.eye(3)
 
     def update(self, y_gps) -> None:
+        t0 = time.time()
         self.z, self.P, used_cvxpy, info = intrinsic_cvxpy_update_SE2(
             z_pred=self.z,
             P_pred=self.P,
@@ -152,6 +153,8 @@ class ContinuousDiscreteCarISCVXCVXPY:
         self.last_l2_reg_weight = info["final_l2_reg_weight"]
         self.last_backtracking_steps = info["total_backtracking_steps"]
         self.last_rejected_step = info["rejected_step"]
+        tf = time.time()
+        self.update_t = tf-t0
 
     def step(self, u, y_gps=None) -> np.ndarray:
         self.predict(u)

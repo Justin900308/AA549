@@ -9,7 +9,7 @@ Measurement: y = [x, y] + V.
 from __future__ import annotations
 
 import numpy as np
-
+import time
 from dynamics import ekf_A_matrix, gps_H_matrix, wrap_angle, unicycle_dynamics
 from integrator import covariance_euler, rk4
 
@@ -23,6 +23,7 @@ class ContinuousDiscreteCarEKF:
         self.N = np.asarray(N, dtype=float).reshape(2, 2)
         self.dt = float(dt)
         self.H = gps_H_matrix()
+        self.update_t = None
 
     def predict(self, u) -> None:
         u = np.asarray(u, dtype=float).reshape(2)
@@ -35,6 +36,7 @@ class ContinuousDiscreteCarEKF:
         self.P += 1e-15 * np.eye(3)
 
     def update(self, y_gps) -> None:
+        t0 = time.time()
         y_gps = np.asarray(y_gps, dtype=float).reshape(2)
         residual = y_gps - self.z[1:3] # (innovation)
         S = self.H @ self.P @ self.H.T + self.N
@@ -49,6 +51,8 @@ class ContinuousDiscreteCarEKF:
         self.P = (I - K @ self.H) @ self.P
         self.P = 0.5 * (self.P + self.P.T)
         self.P += 1e-15 * np.eye(3)
+        tf = time.time()
+        self.update_t = tf-t0
 
     def step(self, u, y_gps=None) -> np.ndarray:
         self.predict(u)

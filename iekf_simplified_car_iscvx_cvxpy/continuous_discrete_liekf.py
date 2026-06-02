@@ -18,6 +18,7 @@ The Riccati matrices are
 """
 
 from __future__ import annotations
+import time
 
 import numpy as np
 
@@ -44,6 +45,7 @@ class ContinuousDiscreteCarLIEKF:
         self.N = np.asarray(N, dtype=float).reshape(2, 2)
         self.dt = float(dt)
         self.H = gps_H_matrix()
+        self.update_t = None
 
     def predict(self, u) -> None:
         u = np.asarray(u, dtype=float).reshape(2)
@@ -56,6 +58,7 @@ class ContinuousDiscreteCarLIEKF:
         self.P += 1e-15 * np.eye(3)
 
     def update(self, y_gps) -> None:
+        t0 = time.time()
         y_gps = np.asarray(y_gps, dtype=float).reshape(2)
         residual = liekf_left_gps_residual(self.z, y_gps)
 
@@ -73,6 +76,8 @@ class ContinuousDiscreteCarLIEKF:
         self.P = (I - K @ self.H) @ self.P
         self.P = 0.5 * (self.P + self.P.T)
         self.P += 1e-15 * np.eye(3)
+        tf = time.time()
+        self.update_t = tf-t0
 
     def step(self, u, y_gps=None) -> np.ndarray:
         self.predict(u)
