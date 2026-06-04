@@ -29,13 +29,13 @@ dt_traj_gen = dt_ratio*dt
 T_FINAL = 20.0  # seconds
 T = int(T_FINAL / dt) + 1
 T_traj_gen = int(T_FINAL / dt_traj_gen) + 1
-GPS_DT = 4  # 1 Hz GPS
+GPS_DT = 1  # 1 Hz GPS
 UPDATE_STRIDE = int(GPS_DT / dt)
 n = 3
 m = 2
 num_obs = 2
 obs = np.array([[4, 3], [8, 3]]) * 1
-obs_r = 1.5
+obs_r = 1.8
 z_0 = np.zeros(n)
 z_des = np.array([0, 10, 5.5])
 
