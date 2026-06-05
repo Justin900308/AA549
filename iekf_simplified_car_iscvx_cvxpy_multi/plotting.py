@@ -1,4 +1,4 @@
-"""Plot helpers for the simplified-car replication."""
+"Plot helpers for the simplified-car replication."
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from matplotlib.patches import Circle
 
 
 ESTIMATOR_LABELS = {
+    "particle": "PF",
     "ekf": "EKF",
     "liekf": "LIEKF",
     "iscvx": "ISCVX",
@@ -25,6 +26,7 @@ def plot_simplified_car_cases(case, results_by_case, save_path: str | None = Non
     for j, res in enumerate(results_by_case):
         t = res["time"]
         true = res["true"]
+        particle = res["particle"]
         ekf = res["ekf"]
         liekf = res["liekf"]
         iscvx = res["iscvx"]
@@ -33,6 +35,7 @@ def plot_simplified_car_cases(case, results_by_case, save_path: str | None = Non
         ax.plot(true[:, 1], true[:, 2], "-", label="True trajectory")
         ax.plot(true[0, 1], true[0, 2], "r.", markersize=10, label="Initial position")
         ax.plot(true[-1, 1], true[-1, 2], "g.", markersize=10, label="Final position")
+        ax.plot(particle[:, 1], particle[:, 2], "-.", label="PF estimate")
         ax.plot(ekf[:, 1], ekf[:, 2], "--", label="EKF estimate")
         ax.plot(liekf[:, 1], liekf[:, 2], "-", label="LIEKF estimate")
         ax.plot(iscvx[:, 1], iscvx[:, 2], ":", linewidth=2.0, label="ISCVX estimate")
@@ -48,6 +51,7 @@ def plot_simplified_car_cases(case, results_by_case, save_path: str | None = Non
         ax.legend(loc="best", fontsize=8)
 
         ax = axes[1, j]
+        ax.plot(t, res["heading_error_particle_deg"], "-.", label="PF")
         ax.plot(t, res["heading_error_ekf_deg"], "--", label="EKF")
         ax.plot(t, res["heading_error_liekf_deg"], "-", label="LIEKF")
         ax.plot(t, res["heading_error_iscvx_deg"], ":", linewidth=2.0, label="ISCVX")
@@ -57,6 +61,7 @@ def plot_simplified_car_cases(case, results_by_case, save_path: str | None = Non
         ax.legend(loc="best", fontsize=8)
 
         ax = axes[2, j]
+        ax.plot(t, res["position_error_particle_m"], "-.", label="PF")
         ax.plot(t, res["position_error_ekf_m"], "--", label="EKF")
         ax.plot(t, res["position_error_liekf_m"], "-", label="LIEKF")
         ax.plot(t, res["position_error_iscvx_m"], ":", linewidth=2.0, label="ISCVX")
