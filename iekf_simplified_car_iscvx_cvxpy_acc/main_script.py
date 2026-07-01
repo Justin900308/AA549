@@ -1,0 +1,261 @@
+"""Replicate the simplified-car EKF/LIEKF/ISCVX example from Barrau-Bonnabel TAC 2017.
+
+Run:
+    python main_script.py
+
+The setup matches Sec. IV-D of the paper:
+  * unicycle/simplified-car dynamics,
+  * 10 m diameter circle,
+  * 40 s simulation,
+  * odometer/differential odometry at 100 Hz,
+  * GPS position measurement at 1 Hz,
+  * N = I_2,
+  * Q = diag((pi/180)^2, 1e-4, 1e-4),
+  * two initial heading errors: 1 deg and 45 deg,
+  * initial position known.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+from continuous_discrete_ekf import ContinuousDiscreteCarEKF
+from continuous_discrete_liekf import ContinuousDiscreteCarLIEKF
+# from continuous_discrete_iscvx_cvxpy import ContinuousDiscreteCarISCVXCVXPY, CVXPY_AVAILABLE
+# from continuous_discrete_iscvx_cvxpy_obstacle import ContinuousDiscreteCarISCVXCVXPY
+# from continuous_discrete_iscvx_cvxpy_obstacle_objstop import ContinuousDiscreteCarISCVXCVXPY
+from iscvx_cvxpy_l2_backtracking import ContinuousDiscreteCarISCVXCVXPY
+from dynamics import heading_error_deg, position_error, unicycle_dynamics, wrap_angle
+from plotting import plot_simplified_car_cases
+from integrator import rk4
+import constants as ct
+from traj_gen import traj_gen_fun
+
+#### Select case
+Case = 1  ## for the circle example
+
+
+Case = 2  ## for the constrained case
+
+
+def control_profile(_t: float) -> np.ndarray:
+    return np.array([ct.v_const, ct.omega_const], dtype=float)
+
+
+def traj_simulation(z_traj, u_traj, add_noise: bool = ct.ADD_SIMULATION_NOISE):
+    rng = np.random.default_rng(ct.RNG_SEED)
+    time = np.arange(ct.T) * ct.dt
+    true = np.zeros((ct.T, 3))
+    odom = np.zeros((ct.T - 1, 2))
+    gps = np.full((ct.T, 2), np.nan)
+    update_mask = np.zeros(ct.T, dtype=bool)
+    dt_ratio = ct.dt_traj_gen / ct.dt
+    control_count = 0
+    for k in range(ct.T - 1):
+        if Case == 1:
+            u_true = control_profile(time[k])
+        else:
+            u_true = u_traj[control_count]
+        if k % dt_ratio == 0:
+            control_count += 1
+            if control_count == ct.T_traj_gen - 1:
+                control_count -= 1
+
+        odom[k] = u_true.copy()
+        if add_noise:
+            # Optional simulated sensor perturbations.  Off by default for paper-style observer tests.
+            beta = rng.multivariate_normal(np.zeros(3), ct.Q)
+            odom[k, 1] += beta[0]
+            odom[k, 0] += beta[1]
+        true[k + 1] = rk4(unicycle_dynamics, true[k], u_true, ct.dt)
+
+        if (k + 1) % ct.UPDATE_STRIDE == 0:
+            gps[k + 1] = true[k + 1, 1:3]
+            if add_noise:
+                gps[k + 1] += rng.multivariate_normal(np.zeros(2), ct.N)
+            update_mask[k + 1] = True
+
+    return time, true, odom, gps, update_mask
+
+
+def run_case(initial_heading_error_deg: float):
+    time, true, odom, gps, update_mask = traj_simulation(z_traj, u_traj)
+    z0 = true[0].copy()
+    z0[0] = wrap_angle(z0[0] + np.deg2rad(initial_heading_error_deg))
+    # Initial position is assumed known.  A tiny epsilon keeps the covariance numerically well-conditioned.
+    P0 = np.diag([np.deg2rad(initial_heading_error_deg) ** 2, 1e-12, 1e-12])
+
+    ekf = ContinuousDiscreteCarEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
+    liekf = ContinuousDiscreteCarLIEKF(z0=z0, P0=P0, Q=ct.Q, N=ct.N, dt=ct.dt)
+    if Case == 1:
+        constraint_flag = False,
+    else:
+        constraint_flag = True
+    # iscvx = ContinuousDiscreteCarISCVXCVXPY(
+    #     z0=z0,
+    #     P0=P0,
+    #     Q=ct.Q,
+    #     N=ct.N,
+    #     dt=ct.dt,
+    #     trust_radius=0.5,
+    #     max_scp_iters=5,
+    #     solver=None,
+    #     fallback_without_cvxpy=True,
+    # )
+
+    # iscvx = ContinuousDiscreteCarISCVXCVXPY(
+    #     z0=z0,
+    #     P0=P0,
+    #     Q=ct.Q,
+    #     N=ct.N,
+    #     dt=ct.dt,
+    #     trust_radius=0.5,
+    #     max_scp_iters=5,
+    #     obs=ct.obs,
+    #     obs_r=ct.obs_r,
+    # )
+
+    iscvx = ContinuousDiscreteCarISCVXCVXPY(
+        z0=z0,
+        P0=P0,
+        Q=ct.Q,
+        N=ct.N,
+        dt=ct.dt,
+        flag=constraint_flag,
+        max_scp_iters=5,
+        obs=ct.obs,
+        obs_r=ct.obs_r,
+    )
+
+    z_ekf = np.zeros_like(true)
+    z_liekf = np.zeros_like(true)
+    z_iscvx = np.zeros_like(true)
+    z_ekf[0] = ekf.z
+    z_liekf[0] = liekf.z
+    z_iscvx[0] = iscvx.z
+    condition_times_avg = np.zeros(3)
+    count = 0
+    for k in range(ct.T - 1):
+        if update_mask[k + 1]:
+            yk = gps[k + 1]
+            ekf_t = ekf.update_t
+            liekf_t = liekf.update_t
+            iscvx_t = iscvx.update_t
+            if ekf_t is not None:
+                print(rf"update time  for EKF: {ekf_t}, for LIEKF: {liekf_t}, and for ISCVX-EKF {iscvx_t}")
+                condition_times_avg += np.array([ekf_t, liekf_t, iscvx_t])
+                count += 1
+        else:
+            yk = None
+
+        z_ekf[k + 1] = ekf.step(odom[k], yk)
+        z_liekf[k + 1] = liekf.step(odom[k], yk)
+        z_iscvx[k + 1] = iscvx.step(odom[k], yk)
+    condition_times_avg /= count
+    print(rf"average condition time {condition_times_avg}")
+    heading_ekf = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_ekf)])
+    heading_liekf = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_liekf)])
+    heading_iscvx = np.array([heading_error_deg(zt, zh) for zt, zh in zip(true, z_iscvx)])
+    pos_ekf = np.array([position_error(zt, zh) for zt, zh in zip(true, z_ekf)])
+    pos_liekf = np.array([position_error(zt, zh) for zt, zh in zip(true, z_liekf)])
+    pos_iscvx = np.array([position_error(zt, zh) for zt, zh in zip(true, z_iscvx)])
+
+    return {
+        "initial_heading_error_deg": float(initial_heading_error_deg),
+        "time": time,
+        "true": true,
+        "ekf": z_ekf,
+        "liekf": z_liekf,
+        "iscvx": z_iscvx,
+        "gps": gps,
+        "update_mask": update_mask,
+        "heading_error_ekf_deg": heading_ekf,
+        "heading_error_liekf_deg": heading_liekf,
+        "heading_error_iscvx_deg": heading_iscvx,
+        "position_error_ekf_m": pos_ekf,
+        "position_error_liekf_m": pos_liekf,
+        "position_error_iscvx_m": pos_iscvx,
+        "ekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_ekf ** 2))),
+        "liekf_heading_rmse_deg": float(np.sqrt(np.mean(heading_liekf ** 2))),
+        "iscvx_heading_rmse_deg": float(np.sqrt(np.mean(heading_iscvx ** 2))),
+        "ekf_position_rmse_m": float(np.sqrt(np.mean(pos_ekf ** 2))),
+        "liekf_position_rmse_m": float(np.sqrt(np.mean(pos_liekf ** 2))),
+        "iscvx_position_rmse_m": float(np.sqrt(np.mean(pos_iscvx ** 2))),
+        "ekf_final_heading_error_deg": float(heading_ekf[-1]),
+        "liekf_final_heading_error_deg": float(heading_liekf[-1]),
+        "iscvx_final_heading_error_deg": float(heading_iscvx[-1]),
+        "ekf_final_position_error_m": float(pos_ekf[-1]),
+        "liekf_final_position_error_m": float(pos_liekf[-1]),
+        "iscvx_final_position_error_m": float(pos_iscvx[-1]),
+        "iscvx_used_cvxpy": bool(iscvx.used_cvxpy),
+        "iscvx_used_fallback": bool(iscvx.used_fallback),
+        "condition_times": condition_times_avg
+    }
+
+
+def Estimator_sim():
+    return [run_case(err) for err in ct.INITIAL_HEADING_ERRORS_DEG]
+
+
+if __name__ == "__main__":
+    z_traj = np.zeros([ct.T_traj_gen, ct.n])
+    z_traj[0] = ct.z_0
+    u_traj = np.zeros([ct.T_traj_gen - 1, ct.m])
+    if Case == 2:
+        [z_traj, u_traj, Jacobians] = traj_gen_fun(z_traj, u_traj)
+    results = Estimator_sim()
+    print("Simplified-car paper replication parameters")
+    print(f"  dt = {ct.dt:.3f} s, odometry rate = {1 / ct.dt:.0f} Hz")
+    print(f"  GPS update period = {ct.UPDATE_STRIDE} dt = {ct.GPS_DT:.1f} s")
+    print(f"  circle diameter = {ct.CIRCLE_DIAMETER:.1f} m, final time = {ct.T_FINAL:.1f} s")
+    print(f"  v = {ct.v_const:.6f} m/s, omega = {ct.omega_const:.6f} rad/s")
+    print(f"  Q = diag({ct.Q[0, 0]:.8e}, {ct.Q[1, 1]:.1e}, {ct.Q[2, 2]:.1e})")
+    print("  N = I_2")
+
+    summary = []
+    for res in results:
+        summary.append(
+            {
+                "initial_heading_error_deg": res["initial_heading_error_deg"],
+                "ekf_heading_rmse_deg": res["ekf_heading_rmse_deg"],
+                "liekf_heading_rmse_deg": res["liekf_heading_rmse_deg"],
+                "iscvx_heading_rmse_deg": res["iscvx_heading_rmse_deg"],
+                "ekf_position_rmse_m": res["ekf_position_rmse_m"],
+                "liekf_position_rmse_m": res["liekf_position_rmse_m"],
+                "iscvx_position_rmse_m": res["iscvx_position_rmse_m"],
+                "ekf_final_heading_error_deg": res["ekf_final_heading_error_deg"],
+                "liekf_final_heading_error_deg": res["liekf_final_heading_error_deg"],
+                "iscvx_final_heading_error_deg": res["iscvx_final_heading_error_deg"],
+                "ekf_final_position_error_m": res["ekf_final_position_error_m"],
+                "liekf_final_position_error_m": res["liekf_final_position_error_m"],
+                "iscvx_final_position_error_m": res["iscvx_final_position_error_m"],
+                "iscvx_used_cvxpy": res["iscvx_used_cvxpy"],
+                "iscvx_used_fallback": res["iscvx_used_fallback"],
+            }
+        )
+        print(f"Initial heading error: {res['initial_heading_error_deg']:.0f} deg")
+        print(f"  EKF   heading RMSE: {res['ekf_heading_rmse_deg']:.4f} deg")
+        print(f"  LIEKF heading RMSE: {res['liekf_heading_rmse_deg']:.4f} deg")
+        print(f"  ISCVX heading RMSE: {res['iscvx_heading_rmse_deg']:.4f} deg")
+        print(f"  EKF   position RMSE: {res['ekf_position_rmse_m']:.4f} m")
+        print(f"  LIEKF position RMSE: {res['liekf_position_rmse_m']:.4f} m")
+        print(f"  ISCVX position RMSE: {res['iscvx_position_rmse_m']:.4f} m")
+        print(
+            f"  EKF   final errors: heading={res['ekf_final_heading_error_deg']:.4f} deg, pos={res['ekf_final_position_error_m']:.4f} m")
+        print(
+            f"  LIEKF final errors: heading={res['liekf_final_heading_error_deg']:.4f} deg, pos={res['liekf_final_position_error_m']:.4f} m")
+        print(
+            f"  ISCVX final errors: heading={res['iscvx_final_heading_error_deg']:.4f} deg, pos={res['iscvx_final_position_error_m']:.4f} m")
+        print()
+
+    out_dir = Path(__file__).resolve().parent
+    with open(out_dir / "summary.json", "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    plot_simplified_car_cases(Case, results,
+                              save_path=str(out_dir / "simplified_car_ekf_liekf_iscvx_cvxpy_comparison.png"))
+    plt.show()
